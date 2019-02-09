@@ -43,14 +43,20 @@ enum EndstopEnum : char {
   Z2_MIN,
   Z2_MAX,
   Z3_MIN,
-  Z3_MAX
+  Z3_MAX,
+  I_MIN,
+  I_MAX,
+  J_MIN,
+  J_MAX,
+  K_MIN,
+  K_MAX
 };
 
 class Endstops {
 
   public:
 
-    #if HAS_EXTRA_ENDSTOPS
+    #if NON_E_AXES > 3 || HAS_EXTRA_ENDSTOPS
       typedef uint16_t esbits_t;
       #if ENABLED(X_DUAL_ENDSTOPS)
         static float x2_endstop_adj;
@@ -67,11 +73,12 @@ class Endstops {
     #else
       typedef uint8_t esbits_t;
     #endif
-
+    typedef esbits_t hitstate_t;      
+      
   private:
     static bool enabled, enabled_globally;
     static esbits_t live_state;
-    static volatile uint8_t hit_state;      // Use X_MIN, Y_MIN, Z_MIN and Z_MIN_PROBE as BIT index
+    static volatile hitstate_t hit_state;      // Use X_MIN, Y_MIN, Z_MIN and Z_MIN_PROBE as BIT index
 
     #if ENDSTOP_NOISE_THRESHOLD
       static esbits_t validated_live_state;
@@ -97,7 +104,9 @@ class Endstops {
       );
     }
 
-    static inline bool global_enabled() { return enabled_globally; }
+    FORCE_INLINE static bool global_enabled() {
+      return enabled_globally;
+    }
 
     /**
      * Periodic call to poll endstops if required. Called from temperature ISR
@@ -114,7 +123,7 @@ class Endstops {
     /**
      * Get Endstop hit state.
      */
-    FORCE_INLINE static uint8_t trigger_state() { return hit_state; }
+    FORCE_INLINE static hitstate_t trigger_state() { return hit_state; }
 
     /**
      * Get current endstops state

@@ -59,8 +59,8 @@
   #include "../feature/fwretract.h"
 #endif
 
-#define XYZ_CONSTS(type, array, CONFIG) const PROGMEM type array##_P[XYZ] = { X_##CONFIG, Y_##CONFIG, Z_##CONFIG }
-
+#define XYZ_CONSTS(type, array, CONFIG) const PROGMEM type array##_P[NON_E_AXES] = \
+    ARRAY_N(NON_E_AXES, X_##CONFIG, Y_##CONFIG, Z_##CONFIG, I_##CONFIG, J_##CONFIG, K_##CONFIG)
 XYZ_CONSTS(float, base_min_pos,   MIN_POS);
 XYZ_CONSTS(float, base_max_pos,   MAX_POS);
 XYZ_CONSTS(float, base_home_pos,  HOME_POS);
@@ -88,7 +88,7 @@ bool relative_mode; // = false;
  *   Used by 'buffer_line_to_current_position' to do a move after changing it.
  *   Used by 'sync_plan_position' to update 'planner.position'.
  */
-float current_position[XYZE] = { 0 };
+float current_position[NUM_AXIS] = { 0 };
 
 /**
  * Cartesian Destination
@@ -96,7 +96,7 @@ float current_position[XYZE] = { 0 };
  *   and expected by functions like 'prepare_move_to_destination'.
  *   Set with 'get_destination_from_command' or 'set_destination_from_current'.
  */
-float destination[XYZE] = { 0 };
+float destination[NUM_AXIS] = { 0 };
 
 // The active extruder (tool). Set with T<extruder> command.
 #if EXTRUDERS > 1
@@ -117,13 +117,22 @@ float feedrate_mm_s = MMM_TO_MMS(1500.0f);
 int16_t feedrate_percentage = 100;
 
 // Homing feedrate is const progmem - compare to constexpr in the header
-const float homing_feedrate_mm_s[XYZ] PROGMEM = {
+const float homing_feedrate_mm_s[NON_E_AXES] PROGMEM = {
   #if ENABLED(DELTA)
-    MMM_TO_MMS(HOMING_FEEDRATE_Z), MMM_TO_MMS(HOMING_FEEDRATE_Z),
+    MMM_TO_MMS(HOMING_FEEDRATE_Z), MMM_TO_MMS(HOMING_FEEDRATE_Z)
   #else
-    MMM_TO_MMS(HOMING_FEEDRATE_XY), MMM_TO_MMS(HOMING_FEEDRATE_XY),
+    MMM_TO_MMS(HOMING_FEEDRATE_XY), MMM_TO_MMS(HOMING_FEEDRATE_XY)
   #endif
-  MMM_TO_MMS(HOMING_FEEDRATE_Z)
+  , MMM_TO_MMS(HOMING_FEEDRATE_Z)
+  #if NON_E_AXES > 3
+    , MMM_TO_MMS(HOMING_FEEDRATE_I)
+    #if NON_E_AXES > 4
+      , MMM_TO_MMS(HOMING_FEEDRATE_J)
+      #if NON_E_AXES > 5
+        , MMM_TO_MMS(HOMING_FEEDRATE_K)
+      #endif
+    #endif
+  #endif
 };
 
 // Cartesian conversion result goes here:
@@ -143,16 +152,16 @@ float cartes[XYZ];
  */
 #if HAS_POSITION_SHIFT
   // The distance that XYZ has been offset by G92. Reset by G28.
-  float position_shift[XYZ] = { 0 };
+  float position_shift[NON_E_AXES] = { 0 };
 #endif
 #if HAS_HOME_OFFSET
   // This offset is added to the configured home position.
   // Set by M206, M428, or menu item. Saved to EEPROM.
-  float home_offset[XYZ] = { 0 };
+  float home_offset[NON_E_AXES] = { 0 };
 #endif
 #if HAS_HOME_OFFSET && HAS_POSITION_SHIFT
   // The above two are combined to save on computes
-  float workspace_offset[XYZ] = { 0 };
+  float workspace_offset[NON_E_AXES] = { 0 };
 #endif
 
 #if OLDSCHOOL_ABL
@@ -166,7 +175,15 @@ void report_current_position() {
   SERIAL_ECHOPAIR("X:", LOGICAL_X_POSITION(current_position[X_AXIS]));
   SERIAL_ECHOPAIR(" Y:", LOGICAL_Y_POSITION(current_position[Y_AXIS]));
   SERIAL_ECHOPAIR(" Z:", LOGICAL_Z_POSITION(current_position[Z_AXIS]));
-  SERIAL_ECHOPAIR(" E:", current_position[E_AXIS]);
+  #if NON_E_AXES > 3
+    SERIAL_ECHOPAIR(" I:", current_position[I_AXIS]);
+    #if NON_E_AXES > 4
+      SERIAL_ECHOPAIR(" J:", current_position[J_AXIS]);
+      #if NON_E_AXES > 5
+        SERIAL_ECHOPAIR(" K:", current_position[K_AXIS]);
+      #endif
+    #endif
+  #endif
 
   stepper.report_positions();
 
@@ -185,7 +202,17 @@ void sync_plan_position() {
   #if ENABLED(DEBUG_LEVELING_FEATURE)
     if (DEBUGGING(LEVELING)) DEBUG_POS("sync_plan_position", current_position);
   #endif
-  planner.set_position_mm(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
+  planner.set_position_mm(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS],
+    #if NON_E_AXES > 3
+      current_position[I_AXIS],
+      #if NON_E_AXES > 4
+        current_position[J_AXIS],
+        #if NON_E_AXES > 5
+          current_position[K_AXIS],
+        #endif
+      #endif
+    #endif
+    current_position[E_AXIS]);
 }
 
 void sync_plan_position_e() { planner.set_e_position_mm(current_position[E_AXIS]); }
@@ -215,6 +242,7 @@ void get_cartesian_from_steppers() {
     #else
       cartes[X_AXIS] = planner.get_axis_position_mm(X_AXIS);
       cartes[Y_AXIS] = planner.get_axis_position_mm(Y_AXIS);
+      
     #endif
     cartes[Z_AXIS] = planner.get_axis_position_mm(Z_AXIS);
   #endif
@@ -235,13 +263,23 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
   get_cartesian_from_steppers();
 
   #if HAS_POSITION_MODIFIERS
-    float pos[XYZE] = { cartes[X_AXIS], cartes[Y_AXIS], cartes[Z_AXIS], current_position[E_AXIS] };
+    float pos[NUM_AXIS] = { cartes[X_AXIS], cartes[Y_AXIS], cartes[Z_AXIS],
+    #if NON_E_AXES > 3
+      current_position[I_AXIS],
+      #if NON_E_AXES > 4
+        current_position[J_AXIS],
+        #if NON_E_AXES > 5
+          current_position[K_AXIS],
+        #endif
+      #endif
+    #endif    
+    current_position[E_AXIS] };
     planner.unapply_modifiers(pos
       #if HAS_LEVELING
         , true
       #endif
     );
-    const float (&cartes)[XYZE] = pos;
+    const float (&cartes)[NUM_AXIS] = pos;
   #endif
   if (axis == ALL_AXES)
     COPY(current_position, cartes);
@@ -254,7 +292,17 @@ void set_current_from_steppers_for_axis(const AxisEnum axis) {
  * (or from wherever it has been told it is located).
  */
 void line_to_current_position() {
-  planner.buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], feedrate_mm_s, active_extruder);
+  planner.buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS]
+    #if NON_E_AXES > 3
+      , current_position[I_AXIS]
+      #if NON_E_AXES > 4
+        , current_position[J_AXIS]
+        #if NON_E_AXES > 5
+          , current_position[K_AXIS]
+        #endif
+      #endif
+    #endif    
+  , current_position[E_AXIS], feedrate_mm_s, active_extruder);
 }
 
 /**
@@ -262,7 +310,17 @@ void line_to_current_position() {
  * used by G0/G1/G2/G3/G5 and many other functions to set a destination.
  */
 void buffer_line_to_destination(const float fr_mm_s) {
-  planner.buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], fr_mm_s, active_extruder);
+  planner.buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS]
+      #if NON_E_AXES > 3
+      , destination[I_AXIS]
+      #if NON_E_AXES > 4
+        , destination[J_AXIS]
+        #if NON_E_AXES > 5
+          , destination[K_AXIS]
+        #endif
+      #endif
+    #endif    
+  , destination[E_AXIS], fr_mm_s, active_extruder);
 }
 
 #if IS_KINEMATIC
@@ -300,7 +358,17 @@ void do_blocking_move_to(const float rx, const float ry, const float rz, const f
   const float old_feedrate_mm_s = feedrate_mm_s;
 
   #if ENABLED(DEBUG_LEVELING_FEATURE)
-    if (DEBUGGING(LEVELING)) print_xyz(PSTR(">>> do_blocking_move_to"), NULL, rx, ry, rz);
+    if (DEBUGGING(LEVELING)) print_xyz(PSTR(">>> do_blocking_move_to"), NULL, rx, ry, rz
+      #if NON_E_AXES > 3
+        , 0
+        #if NON_E_AXES > 4
+		  , 0
+          #if NON_E_AXES > 5
+		    , 0
+          #endif
+        #endif
+      #endif
+    );
   #endif
 
   const float z_feedrate = fr_mm_s ? fr_mm_s : homing_feedrate(Z_AXIS);
@@ -454,8 +522,8 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
   bool soft_endstops_enabled = true;
 
   // Software Endstops are based on the configured limits.
-  float soft_endstop_min[XYZ] = { X_MIN_BED, Y_MIN_BED, Z_MIN_POS },
-        soft_endstop_max[XYZ] = { X_MAX_BED, Y_MAX_BED, Z_MAX_POS };
+  float soft_endstop_min[NON_E_AXES] = ARRAY_N(NON_E_AXES, X_MIN_BED, Y_MIN_BED, Z_MIN_POS, I_MIN_POS, J_MIN_POS, K_MIN_POS),
+        soft_endstop_max[NON_E_AXES] = ARRAY_N(NON_E_AXES, X_MAX_BED, Y_MAX_BED, Z_MAX_POS, I_MAX_POS, J_MAX_POS, K_MAX_POS);
 
   #if IS_KINEMATIC
     float soft_endstop_radius, soft_endstop_radius_2;
@@ -467,7 +535,7 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
    * For DELTA/SCARA the XY constraint is based on the smallest
    * radius within the set software endstops.
    */
-  void clamp_to_software_endstops(float target[XYZ]) {
+  void clamp_to_software_endstops(float target[NON_E_AXES]) {
     if (!soft_endstops_enabled) return;
     #if IS_KINEMATIC
       const float dist_2 = HYPOT2(target[X_AXIS], target[Y_AXIS]);
@@ -496,6 +564,30 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
     #if ENABLED(MAX_SOFTWARE_ENDSTOP_Z)
       NOMORE(target[Z_AXIS], soft_endstop_max[Z_AXIS]);
     #endif
+    #if NON_E_AXES > 3
+      #if ENABLED(MIN_SOFTWARE_ENDSTOP_I)
+        NOLESS(target[I_AXIS], soft_endstop_min[I_AXIS]);
+      #endif
+      #if ENABLED(MAX_SOFTWARE_ENDSTOP_I)
+        NOMORE(target[I_AXIS], soft_endstop_max[I_AXIS]);
+      #endif
+      #if NON_E_AXES > 4
+        #if ENABLED(MIN_SOFTWARE_ENDSTOP_J)
+          NOLESS(target[J_AXIS], soft_endstop_min[J_AXIS]);
+        #endif
+        #if ENABLED(MAX_SOFTWARE_ENDSTOP_J)
+          NOMORE(target[J_AXIS], soft_endstop_max[J_AXIS]);
+        #endif
+        #if NON_E_AXES > 5
+          #if ENABLED(MIN_SOFTWARE_ENDSTOP_K)
+            NOLESS(target[K_AXIS], soft_endstop_min[K_AXIS]);
+          #endif
+          #if ENABLED(MAX_SOFTWARE_ENDSTOP_K)
+            NOMORE(target[K_AXIS], soft_endstop_max[K_AXIS]);
+          #endif
+        #endif // NON_E_AXES > 5
+      #endif // NON_E_AXES > 4
+    #endif // NON_E_AXES > 3
   }
 
   /**
@@ -673,7 +765,7 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
     //*/
 
     // Get the current position as starting point
-    float raw[XYZE];
+    float raw[NUM_AXIS];
     COPY(raw, current_position);
 
     // Calculate and execute the segments
@@ -686,7 +778,7 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
         idle();
       }
 
-      LOOP_XYZE(i) raw[i] += segment_distance[i];
+      LOOP_NUM_AXIS(i) raw[i] += segment_distance[i];
 
       if (!planner.buffer_line(raw, _feedrate_mm_s, active_extruder, cartesian_segment_mm
         #if ENABLED(SCARA_FEEDRATE_SCALING)
@@ -730,7 +822,16 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
 
       // Remaining cartesian distances
       const float zdiff = destination[Z_AXIS] - current_position[Z_AXIS],
-                  ediff = destination[E_AXIS] - current_position[E_AXIS];
+        #if NON_E_AXES > 3
+    	  idiff = destination[I_AXIS] - current_position[I_AXIS];
+          #if NON_E_AXES > 4
+  		    jdiff = destination[J_AXIS] - current_position[J_AXIS];
+            #if NON_E_AXES > 5
+  		      kdiff = destination[K_AXIS] - current_position[K_AXIS];
+            #endif
+          #endif
+        #endif
+        ediff = destination[E_AXIS] - current_position[E_AXIS];
 
       // Get the linear distance in XYZ
       // If the move is very short, check the E move distance
@@ -747,10 +848,19 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
       // The approximate length of each segment
       const float inv_segments = 1.0f / float(segments),
                   cartesian_segment_mm = cartesian_mm * inv_segments,
-                  segment_distance[XYZE] = {
+                  segment_distance[NUM_AXIS] = {
                     xdiff * inv_segments,
                     ydiff * inv_segments,
                     zdiff * inv_segments,
+                    #if NON_E_AXES > 3
+					  idiff * inv_segments,
+                      #if NON_E_AXES > 4
+                        jdiff * inv_segments,
+                        #if NON_E_AXES > 5
+                          kdiff * inv_segments,
+                        #endif
+                      #endif
+                    #endif
                     ediff * inv_segments
                   };
 
@@ -763,7 +873,7 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
       // SERIAL_ECHOLNPAIR(" segment_mm=", cartesian_segment_mm);
 
       // Get the raw current position as starting point
-      float raw[XYZE];
+      float raw[NUM_AXIS];
       COPY(raw, current_position);
 
       // Calculate and execute the segments
@@ -774,7 +884,7 @@ void clean_up_after_endstop_or_probe_move() { bracket_probe_move(false); }
           next_idle_ms = millis() + 200UL;
           idle();
         }
-        LOOP_XYZE(i) raw[i] += segment_distance[i];
+        LOOP_NUM_AXIS(i) raw[i] += segment_distance[i];
         if (!planner.buffer_line(raw, fr_mm_s, active_extruder, cartesian_segment_mm
           #if ENABLED(SCARA_FEEDRATE_SCALING)
             , inv_duration
@@ -1001,26 +1111,93 @@ void prepare_move_to_destination() {
 
 #if HAS_AXIS_UNHOMED_ERR
 
-  bool axis_unhomed_error(const bool x/*=true*/, const bool y/*=true*/, const bool z/*=true*/) {
+  bool axis_unhomed_error(const bool x/*=true*/, const bool y/*=true*/, const bool z/*=true*/
+    #if NON_E_AXES > 3
+    , const bool i/*true*/
+    #if NON_E_AXES > 4
+      , const bool j/*true*/
+      #if NON_E_AXES > 5
+      , const bool k/*true*/
+      #endif
+    #endif
+  #endif
+  ) {
     #if ENABLED(HOME_AFTER_DEACTIVATE)
       const bool xx = x && !TEST(axis_known_position, X_AXIS),
                  yy = y && !TEST(axis_known_position, Y_AXIS),
                  zz = z && !TEST(axis_known_position, Z_AXIS);
+      #if NON_E_AXES > 3
+        const bool ii = i && !TEST(axis_known_position, I_AXIS);
+        #if NON_E_AXES > 4
+          const bool jj = j && !TEST(axis_known_position, J_AXIS);
+          #if NON_E_AXES > 5
+            const bool kk = k && !TEST(axis_known_position, K_AXIS);
+          #endif
+        #endif 
+      #endif
     #else
       const bool xx = x && !TEST(axis_homed, X_AXIS),
                  yy = y && !TEST(axis_homed, Y_AXIS),
                  zz = z && !TEST(axis_homed, Z_AXIS);
+      #if NON_E_AXES > 3
+        const bool ii = i && !TEST(axis_homed, I_AXIS);
+        #if NON_E_AXES > 4
+          const bool jj = j && !TEST(axis_homed, J_AXIS);
+          #if NON_E_AXES > 5
+            const bool kk = k && !TEST(axis_homed, K_AXIS);
+          #endif
+        #endif 
+      #endif
     #endif
-    if (xx || yy || zz) {
+    if (xx || yy || zz
+      #if NON_E_AXES > 3
+	    || ii
+        #if NON_E_AXES > 4
+		  || jj
+          #if NON_E_AXES > 5
+		    || kk
+          #endif
+        #endif
+      #endif
+    ) {
       SERIAL_ECHO_START();
       SERIAL_ECHOPGM(MSG_HOME " ");
       if (xx) SERIAL_ECHOPGM(MSG_X);
       if (yy) SERIAL_ECHOPGM(MSG_Y);
       if (zz) SERIAL_ECHOPGM(MSG_Z);
+      #if NON_E_AXES > 3
+        if (ii) SERIAL_ECHOPGM(MSG_I);
+        #if NON_E_AXES > 4
+          if (jj) SERIAL_ECHOPGM(MSG_J);
+          #if NON_E_AXES > 5
+            if (kk) SERIAL_ECHOPGM(MSG_K);
+          #endif
+        #endif
+      #endif
       SERIAL_ECHOLNPGM(" " MSG_FIRST);
 
       #if ENABLED(ULTRA_LCD) || ENABLED(EXTENSIBLE_UI)
-        ui.status_printf_P(0, PSTR(MSG_HOME " %s%s%s " MSG_FIRST), xx ? MSG_X : "", yy ? MSG_Y : "", zz ? MSG_Z : "");
+        ui.status_printf_P(0, PSTR(MSG_HOME " %s%s%s
+#if NON_E_AXES > 3
+%s
+#if NON_E_AXES > 4
+%s
+#if NON_E_AXES > 5
+%s
+#endif
+#endif
+#endif
+ " MSG_FIRST), xx ? MSG_X : "", yy ? MSG_Y : "", zz ? MSG_Z : ""
+          #if NON_E_AXES > 3
+            , ii ? MSG_I : ""
+            #if NON_E_AXES > 4
+              , jj ? MSG_J : ""
+              #if NON_E_AXES > 5
+                , kk ? MSG_K : ""
+              #endif
+            #endif
+          #endif
+        );
       #endif
       return true;
     }
@@ -1211,13 +1388,23 @@ void do_homing_move(const AxisEnum axis, const float distance, const float fr_mm
     current_position[axis] = distance;
     planner.buffer_line(current_position, fr_mm_s ? fr_mm_s : homing_feedrate(axis), active_extruder);
   #else
-    float target[ABCE] = { planner.get_axis_position_mm(A_AXIS), planner.get_axis_position_mm(B_AXIS), planner.get_axis_position_mm(C_AXIS), planner.get_axis_position_mm(E_AXIS) };
+    float target[NUM_AXIS] = { planner.get_axis_position_mm(A_AXIS), planner.get_axis_position_mm(B_AXIS), planner.get_axis_position_mm(C_AXIS)
+      #if NON_E_AXES > 3
+        , planner.get_axis_position_mm(I_AXIS)
+        #if NON_E_AXES > 4
+          , planner.get_axis_position_mm(J_AXIS)
+          #if NON_E_AXES > 3
+    	    , planner.get_axis_position_mm(K_AXIS)
+          #endif
+        #endif
+      #endif
+      , planner.get_axis_position_mm(E_AXIS) };
     target[axis] = 0;
     planner.set_machine_position_mm(target);
     target[axis] = distance;
 
     #if IS_KINEMATIC && ENABLED(JUNCTION_DEVIATION)
-      const float delta_mm_cart[XYZE] = {0, 0, 0, 0};
+      const float delta_mm_cart[NUM_AXIS] = ARRAY_N(NUM_AXIS, 0, 0, 0, 0, 0, 0, 0};
     #endif
 
     // Set delta/cartesian axes directly
@@ -1397,7 +1584,17 @@ void homeaxis(const AxisEnum axis) {
   #else
     #define CAN_HOME(A) \
       (axis == _AXIS(A) && ((A##_MIN_PIN > -1 && A##_HOME_DIR < 0) || (A##_MAX_PIN > -1 && A##_HOME_DIR > 0)))
-    if (!CAN_HOME(X) && !CAN_HOME(Y) && !CAN_HOME(Z)) return;
+      if (!CAN_HOME(X) && !CAN_HOME(Y) && !CAN_HOME(Z)
+        #if NON_E_AXES > 3
+          && !CAN_HOME(I)
+          #if NON_E_AXES > 4
+            && !CAN_HOME(J)
+            #if NON_E_AXES > 5
+              && !CAN_HOME(K)
+            #endif
+          #endif
+        #endif
+      ) return;
   #endif
 
   #if ENABLED(DEBUG_LEVELING_FEATURE)

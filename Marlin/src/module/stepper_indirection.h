@@ -349,6 +349,40 @@ void reset_stepper_drivers();    // Called by settings.load / settings.reset
   #define Z3_DIR_WRITE(STATE) NOOP
 #endif
 
+#if NON_E_AXES > 3
+  #define I_ENABLE_INIT SET_OUTPUT(I_ENABLE_PIN)
+  #define I_ENABLE_WRITE(STATE) WRITE(I_ENABLE_PIN,STATE)
+  #define I_ENABLE_READ READ(I_ENABLE_PIN)
+  #define I_DIR_INIT SET_OUTPUT(I_DIR_PIN)
+  #define I_DIR_WRITE(STATE) WRITE(I_DIR_PIN,STATE)
+  #define I_DIR_READ READ(I_DIR_PIN)
+  #define I_STEP_INIT SET_OUTPUT(I_STEP_PIN)
+  #define I_STEP_WRITE(STATE) WRITE(I_STEP_PIN,STATE)
+  #define I_STEP_READ READ(I_STEP_PIN)
+  #if NON_E_AXES > 4
+    #define J_ENABLE_INIT SET_OUTPUT(J_ENABLE_PIN)
+    #define J_ENABLE_WRITE(STATE) WRITE(J_ENABLE_PIN,STATE)
+    #define J_ENABLE_READ READ(J_ENABLE_PIN)
+    #define J_DIR_INIT SET_OUTPUT(J_DIR_PIN)
+    #define J_DIR_WRITE(STATE) WRITE(J_DIR_PIN,STATE)
+    #define J_DIR_READ READ(J_DIR_PIN)
+    #define J_STEP_INIT SET_OUTPUT(J_STEP_PIN)
+    #define J_STEP_WRITE(STATE) WRITE(J_STEP_PIN,STATE)
+    #define J_STEP_READ READ(J_STEP_PIN)
+    #if NON_E_AXES > 5
+      #define K_ENABLE_INIT SET_OUTPUT(K_ENABLE_PIN)
+      #define K_ENABLE_WRITE(STATE) WRITE(K_ENABLE_PIN,STATE)
+      #define K_ENABLE_READ READ(K_ENABLE_PIN)
+      #define K_DIR_INIT SET_OUTPUT(K_DIR_PIN)
+      #define K_DIR_WRITE(STATE) WRITE(K_DIR_PIN,STATE)
+      #define K_DIR_READ READ(K_DIR_PIN)
+      #define K_STEP_INIT SET_OUTPUT(K_STEP_PIN)
+      #define K_STEP_WRITE(STATE) WRITE(K_STEP_PIN,STATE)
+      #define K_STEP_READ READ(K_STEP_PIN)
+    #endif
+  #endif
+#endif
+
 // E0 Stepper
 #if AXIS_DRIVER_TYPE_E0(L6470)
   extern L6470 stepperE0;

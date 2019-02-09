@@ -36,7 +36,17 @@
 
 // Axis homed and known-position states
 extern uint8_t axis_homed, axis_known_position;
-constexpr uint8_t xyz_bits = _BV(X_AXIS) | _BV(Y_AXIS) | _BV(Z_AXIS);
+constexpr uint8_t xyz_bits = (_BV(X_AXIS) | _BV(Y_AXIS) | _BV(Z_AXIS)
+  #if NON_E_AXES > 3
+    | _BV(I_AXIS)
+    #if NON_E_AXES > 4
+      | _BV(J_AXIS)
+      #if NON_E_AXES > 5
+        | _BV(K_AXIS)
+      #endif
+    #endif
+  #endif
+);
 FORCE_INLINE bool all_axes_homed() { return (axis_homed & xyz_bits) == xyz_bits; }
 FORCE_INLINE bool all_axes_known() { return (axis_known_position & xyz_bits) == xyz_bits; }
 FORCE_INLINE void set_all_unhomed() { axis_homed = 0; }
@@ -47,8 +57,8 @@ constexpr float slop = 0.0001;
 
 extern bool relative_mode;
 
-extern float current_position[XYZE],  // High-level current tool position
-             destination[XYZE];       // Destination for a move
+extern float current_position[NUM_AXIS],  // High-level current tool position
+             destination[NUM_AXIS];       // Destination for a move
 
 // Scratch space for a cartesian result
 extern float cartes[XYZ];
@@ -71,7 +81,7 @@ extern float cartes[XYZ];
  * Feed rates are often configured with mm/m
  * but the planner and stepper like mm/s units.
  */
-extern const float homing_feedrate_mm_s[XYZ];
+extern const float homing_feedrate_mm_s[NON_E_AXES];
 FORCE_INLINE float homing_feedrate(const AxisEnum a) { return pgm_read_float(&homing_feedrate_mm_s[a]); }
 float get_homing_bump_feedrate(const AxisEnum axis);
 
@@ -98,7 +108,7 @@ FORCE_INLINE float pgm_read_any(const float *p) { return pgm_read_float(p); }
 FORCE_INLINE signed char pgm_read_any(const signed char *p) { return pgm_read_byte(p); }
 
 #define XYZ_DEFS(type, array, CONFIG) \
-  extern const type array##_P[XYZ]; \
+  extern const type array##_P[NON_E_AXES]; \
   FORCE_INLINE type array(AxisEnum axis) { return pgm_read_any(&array##_P[axis]); } \
   typedef void __void_##CONFIG##__
 
@@ -117,13 +127,14 @@ XYZ_DEFS(signed char, home_dir, HOME_DIR);
 
 #if HAS_SOFTWARE_ENDSTOPS
   extern bool soft_endstops_enabled;
-  extern float soft_endstop_min[XYZ], soft_endstop_max[XYZ];
-  void clamp_to_software_endstops(float target[XYZ]);
+  extern float soft_endstop_min[NON_E_AXES], soft_endstop_max[NON_E_AXES];
+  void clamp_to_software_endstops(float target[NON_E_AXES]);
   void update_software_endstops(const AxisEnum axis);
 #else
   constexpr bool soft_endstops_enabled = false;
-  constexpr float soft_endstop_min[XYZ] = { X_MIN_BED, Y_MIN_BED, Z_MIN_POS },
-                  soft_endstop_max[XYZ] = { X_MAX_BED, Y_MAX_BED, Z_MAX_POS };
+  constexpr float soft_endstop_min[NON_E_AXES] = ARRAY_N(NON_E_AXES, X_MIN_BED, Y_MIN_BED, Z_MIN_POS, I_MIN_POS, J_MIN_POS, K_MIN_POS),
+                  soft_endstop_max[NON_E_AXES] = ARRAY_N(NON_E_AXES, X_MAX_BED, Y_MAX_BED, Z_MAX_POS, I_MAX_POS, J_MAX_POS, K_MAX_POS);
+
   #define clamp_to_software_endstops(x) NOOP
   #define update_software_endstops(x) NOOP
 #endif
@@ -202,7 +213,17 @@ void clean_up_after_endstop_or_probe_move();
     ) || ENABLED(NO_MOTION_BEFORE_HOMING)
 
 #if HAS_AXIS_UNHOMED_ERR
-  bool axis_unhomed_error(const bool x=true, const bool y=true, const bool z=true);
+  bool axis_unhomed_error(const bool x=true, const bool y=true, const bool z=true
+    #if NON_E_AXES > 3
+      , const bool i=true
+      #if NON_E_AXES > 4
+        , const bool j=true
+        #if NON_E_AXES > 5
+          , const bool k=true
+        #endif
+      #endif
+    #endif
+  );
 #endif
 
 #if ENABLED(NO_MOTION_BEFORE_HOMING)
@@ -222,13 +243,13 @@ void homeaxis(const AxisEnum axis);
  */
 #if HAS_HOME_OFFSET || HAS_POSITION_SHIFT
   #if HAS_HOME_OFFSET
-    extern float home_offset[XYZ];
+    extern float home_offset[NON_E_AXES];
   #endif
   #if HAS_POSITION_SHIFT
-    extern float position_shift[XYZ];
+    extern float position_shift[NON_E_AXES];
   #endif
   #if HAS_HOME_OFFSET && HAS_POSITION_SHIFT
-    extern float workspace_offset[XYZ];
+    extern float workspace_offset[NON_E_AXES];
     #define WORKSPACE_OFFSET(AXIS) workspace_offset[AXIS]
   #elif HAS_HOME_OFFSET
     #define WORKSPACE_OFFSET(AXIS) home_offset[AXIS]
@@ -248,6 +269,18 @@ void homeaxis(const AxisEnum axis);
 #define RAW_Y_POSITION(POS)     LOGICAL_TO_NATIVE(POS, Y_AXIS)
 #define RAW_Z_POSITION(POS)     LOGICAL_TO_NATIVE(POS, Z_AXIS)
 
+#if defined NON_E_AXES > 3
+  #define LOGICAL_I_POSITION(POS) NATIVE_TO_LOGICAL(POS, I_AXIS)
+  #define RAW_I_POSITION(POS)     LOGICAL_TO_NATIVE(POS, I_AXIS)
+  #if defined NON_E_AXES > 4
+    #define LOGICAL_J_POSITION(POS) NATIVE_TO_LOGICAL(POS, J_AXIS)
+    #define RAW_J_POSITION(POS)     LOGICAL_TO_NATIVE(POS, J_AXIS)
+    #if defined NON_E_AXES > 5
+      #define LOGICAL_K_POSITION(POS) NATIVE_TO_LOGICAL(POS, K_AXIS)
+      #define RAW_K_POSITION(POS)     LOGICAL_TO_NATIVE(POS, K_AXIS)
+    #endif
+  #endif
+#endif
 /**
  * position_is_reachable family of functions
  */

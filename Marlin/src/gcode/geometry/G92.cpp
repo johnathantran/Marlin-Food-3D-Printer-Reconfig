@@ -63,7 +63,7 @@ void GcodeSuite::G92() {
     constexpr bool didXYZ = false;
   #endif
 
-  if (IS_G92_0) LOOP_XYZE(i) {
+  if (IS_G92_0) LOOP_NUM_AXIS(i) {
     if (parser.seenval(axis_codes[i])) {
       const float l = parser.value_axis_units((AxisEnum)i),
                   v = i == E_AXIS ? l : LOGICAL_TO_NATIVE(l, i),

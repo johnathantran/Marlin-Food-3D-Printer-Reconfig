@@ -74,18 +74,47 @@ void serialprintln_onoff(const bool onoff) { serialprint_onoff(onoff); SERIAL_EO
 
   #include "enum.h"
 
-  void print_xyz(PGM_P const prefix, PGM_P const suffix, const float x, const float y, const float z) {
+  void print_xyz(PGM_P const prefix, PGM_P const suffix, const float x, const float y, const float z
+  #if NON_E_AXES > 3
+    , const float i
+    #if NON_E_AXES > 4
+      , const float j
+      #if NON_E_AXES > 5
+        , const float k
+      #endif
+    #endif
+  #endif
+  ) {
     serialprintPGM(prefix);
     SERIAL_CHAR('(');
     SERIAL_ECHO(x);
     SERIAL_ECHOPAIR(", ", y);
     SERIAL_ECHOPAIR(", ", z);
+    #if NON_E_AXES > 3
+      SERIAL_ECHOPAIR(", ", i);
+      #if NON_E_AXES > 4
+        SERIAL_ECHOPAIR(", ", j);
+        #if NON_E_AXES > 5
+          SERIAL_ECHOPAIR(", ", k);
+        #endif
+      #endif
+    #endif
     SERIAL_CHAR(')');
     if (suffix) serialprintPGM(suffix); else SERIAL_EOL();
   }
 
   void print_xyz(PGM_P const prefix, PGM_P const suffix, const float xyz[]) {
-    print_xyz(prefix, suffix, xyz[X_AXIS], xyz[Y_AXIS], xyz[Z_AXIS]);
+    print_xyz(prefix, suffix, xyz[X_AXIS], xyz[Y_AXIS], xyz[Z_AXIS]
+      #if NON_E_AXES > 3
+        , xyz[I_AXIS]
+        #if NON_E_AXES > 4
+          , xyz[J_AXIS]
+          #if NON_E_AXES > 5
+            , xyz[K_AXIS]
+          #endif
+        #endif
+      #endif
+    );
   }
 
 #endif

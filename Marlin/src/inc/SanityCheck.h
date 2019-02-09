@@ -447,6 +447,24 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
   #endif
 #endif
 
+/**
+ * NON_E_AXES > 3
+ */
+#if NON_E_AXES > 3
+  #if !IS_CARTESIAN || HAS_EXTRA_ENDSTOPS || ENABLED(DUAL_X_CARRIAGE) || ENABLED(DUAL_Y_CARRIAGE) || ENABLED(X_DUAL_STEPPER_DRIVERS) || ENABLED(Y_DUAL_STEPPER_DRIVERS) || ENABLED(Z_DUAL_STEPPER_DRIVERS) || ENABLED(Z_TRIPLE_STEPPER_DRIVERS)
+    #error "NON_E_AXES > 3 currently requires a Cartesian with 1 endstop per axis. Untested for multiple carriages or multiple stepper drivers per axis."
+  #elif ENABLED(SENSORLESS_HOMING)
+    #error "NON_E_AXES > 3 is not currently compatible with SENSORLESS_HOMING (untested)."
+  #endif
+
+  /**
+   * Require pin options and pins to be defined
+   */
+  #if (!HAS_I_MIN && !HAS_I_MAX) 
+    #error "NON_E_AXES > 3 requires I_STOP_PIN [, J_STOP_PIN[, K_STOP_PIN]] to be defined > 0)."
+  #endif
+#endif
+
 #if !defined(TARGET_LPC1768) && ( \
      ENABLED(ENDSTOPPULLDOWNS) \
   || ENABLED(ENDSTOPPULLDOWN_XMAX) \
@@ -1192,7 +1210,19 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
 #if X_HOME_BUMP_MM < 0 || Y_HOME_BUMP_MM < 0 || Z_HOME_BUMP_MM < 0
   #error "[XYZ]_HOME_BUMP_MM must be greater than or equal to 0."
 #endif
-
+#if NON_E_AXES > 3
+  #if I_HOME_BUMP_MM < 0
+    #error "I_HOME_BUMP_MM must be greater than or equal to 0."
+  #elif NON_E_AXES > 4
+    #if J_HOME_BUMP_MM < 0
+      #error "J_HOME_BUMP_MM must be greater than or equal to 0."
+    #elif NON_E_AXES > 5
+      #if K_HOME_BUMP_MM < 0
+        #error "K_HOME_BUMP_MM must be greater than or equal to 0."
+      #endif
+    #endif
+  #endif
+#endif
 #if ENABLED(CODEPENDENT_XY_HOMING)
   #if ENABLED(QUICK_HOME)
     #error "QUICK_HOME is incompatible with CODEPENDENT_XY_HOMING."
@@ -1220,6 +1250,11 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
 #if ENABLED(DISABLE_X) || ENABLED(DISABLE_Y) || ENABLED(DISABLE_Z)
   #if ENABLED(HOME_AFTER_DEACTIVATE) || ENABLED(Z_SAFE_HOMING)
     #error "DISABLE_[XYZ] is not compatible with HOME_AFTER_DEACTIVATE or Z_SAFE_HOMING."
+  #endif
+#endif
+#if NON_E_AXES > 3
+  #if ENABLED(DISABLE_I) || ENABLED(DISABLE_J) || ENABLED(DISABLE_K)
+    #error "DISABLE_[IJK] is not compatible with HOME_AFTER_DEACTIVATE or Z_SAVE_HOMING."
   #endif
 #endif
 
@@ -1511,6 +1546,15 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
 #if _AXIS_PLUG_UNUSED_TEST(Z)
   #error "You must enable USE_ZMIN_PLUG or USE_ZMAX_PLUG."
 #endif
+#if NON_E_AXES > 3 && _AXIS_PLUG_UNUSED_TEST(I)
+  #error "You must enable USE_IMIN_PLUG or USE_IMAX_PLUG."
+  #if NON_E_AXES > 4 && _AXIS_PLUG_UNUSED_TEST(J)
+    #error "You must enable USE_JMIN_PLUG or USE_JMAX_PLUG."
+    #if NON_E_AXES > 5 && _AXIS_PLUG_UNUSED_TEST(K)
+      #error "You must enable USE_KMIN_PLUG or USE_KMAX_PLUG."
+    #endif
+  #endif
+#endif  
 
 // Delta and Cartesian use 3 homing endstops
 #if !IS_SCARA
@@ -1523,7 +1567,26 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
   #elif Y_HOME_DIR > 0 && DISABLED(USE_YMAX_PLUG)
     #error "Enable USE_YMAX_PLUG when homing Y to MAX."
   #endif
-#endif
+  #if NON_E_AXES > 3
+    #if I_HOME_DIR < 0 && DISABLED(USE_IMIN_PLUG)
+      #error "Enable USE_IMIN_PLUG when homing I to MIN."
+    #elif I_HOME_DIR > 0 && DISABLED(USE_IMAX_PLUG)
+      #error "Enable USE_IMAX_PLUG when homing I to MAX."
+    #elif NON_E_AXES > 4
+      #if J_HOME_DIR < 0 && DISABLED(USE_JMIN_PLUG)
+        #error "Enable USE_JMIN_PLUG when homing J to MIN."
+      #elif J_HOME_DIR > 0 && DISABLED(USE_JMAX_PLUG)
+        #error "Enable USE_JMAX_PLUG when homing J to MAX."
+      #elif NON_E_AXES > 5
+        #if K_HOME_DIR < 0 && DISABLED(USE_KMIN_PLUG)
+          #error "Enable USE_KMIN_PLUG when homing K to MIN."
+        #elif K_HOME_DIR > 0 && DISABLED(USE_KMAX_PLUG)
+          #error "Enable USE_KMAX_PLUG when homing K to MAX."
+        #endif
+      #endif // NON_E_AXES > 5
+    #endif // NON_E_AXES > 4
+  #endif // NON_E_AXES > 3
+#endif // !IS_SCARA
 #if Z_HOME_DIR < 0 && DISABLED(USE_ZMIN_PLUG)
   #error "Enable USE_ZMIN_PLUG when homing Z to MIN."
 #elif Z_HOME_DIR > 0 && DISABLED(USE_ZMAX_PLUG)
@@ -1790,6 +1853,18 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
   #error "TMC2130 on Z2 requires Z2_CS_PIN."
 #elif INVALID_TMC2130(Z3)
   #error "TMC2130 on Z3 requires Z3_CS_PIN."
+#elif NON_E_AXES > 3
+  #if INVALID_TMC2130(I)
+    #error "TMC2130 on I requires I_CS_PIN."
+  #elif NON_E_AXES > 4
+    #if INVALID_TMC2130(J)
+      #error "TMC2130 on J requires J_CS_PIN."
+    #elif NON_E_AXES > 5
+      #if INVALID_TMC2130(K)
+        #error "TMC2130 on K requires K_CS_PIN."
+      #endif
+    #endif
+  #endif
 #elif INVALID_TMC2130(E0)
   #error "TMC2130 on E0 requires E0_CS_PIN."
 #elif INVALID_TMC2130(E1)
@@ -1951,28 +2026,28 @@ constexpr float sanity_arr_1[] = DEFAULT_AXIS_STEPS_PER_UNIT,
                 sanity_arr_2[] = DEFAULT_MAX_FEEDRATE,
                 sanity_arr_3[] = DEFAULT_MAX_ACCELERATION;
 
-static_assert(COUNT(sanity_arr_1) >= XYZE, "DEFAULT_AXIS_STEPS_PER_UNIT requires 4 (or more) elements.");
-static_assert(COUNT(sanity_arr_1) <= XYZE_N, "DEFAULT_AXIS_STEPS_PER_UNIT has too many elements. (Did you forget to enable DISTINCT_E_FACTORS?)");
+static_assert(COUNT(sanity_arr_1) >= NUM_AXIS, "DEFAULT_AXIS_STEPS_PER_UNIT requires 4 (or more) elements.");
+static_assert(COUNT(sanity_arr_1) <= NUM_AXIS_N, "DEFAULT_AXIS_STEPS_PER_UNIT has too many elements. (Did you forget to enable DISTINCT_E_FACTORS?)");
 static_assert(sanity_arr_1[0] > 0 && sanity_arr_1[1] > 0 && sanity_arr_1[2] > 0
-  && (XYZE_N <= 3 || sanity_arr_1[3] > 0) && (XYZE_N <= 4 || sanity_arr_1[4] > 0)
-  && (XYZE_N <= 5 || sanity_arr_1[5] > 0) && (XYZE_N <= 6 || sanity_arr_1[6] > 0)
-  && (XYZE_N <= 7 || sanity_arr_1[7] > 0) && (XYZE_N <= 8 || sanity_arr_1[8] > 0),
+  && (NUM_AXIS_N <= 3 || sanity_arr_1[3] > 0) && (NUM_AXIS_N <= 4 || sanity_arr_1[4] > 0)
+  && (NUM_AXIS_N <= 5 || sanity_arr_1[5] > 0) && (NUM_AXIS_N <= 6 || sanity_arr_1[6] > 0)
+  && (NUM_AXIS_N <= 7 || sanity_arr_1[7] > 0) && (NUM_AXIS_N <= 8 || sanity_arr_1[8] > 0),
   "DEFAULT_AXIS_STEPS_PER_UNIT values must be positive.");
 
-static_assert(COUNT(sanity_arr_2) >= XYZE, "DEFAULT_MAX_FEEDRATE requires 4 (or more) elements.");
-static_assert(COUNT(sanity_arr_2) <= XYZE_N, "DEFAULT_MAX_FEEDRATE has too many elements. (Did you forget to enable DISTINCT_E_FACTORS?)");
+static_assert(COUNT(sanity_arr_2) >= NUM_AXIS, "DEFAULT_MAX_FEEDRATE requires 4 (or more) elements.");
+static_assert(COUNT(sanity_arr_2) <= NUM_AXIS_N, "DEFAULT_MAX_FEEDRATE has too many elements. (Did you forget to enable DISTINCT_E_FACTORS?)");
 static_assert(sanity_arr_2[0] > 0 && sanity_arr_2[1] > 0 && sanity_arr_2[2] > 0
-  && (XYZE_N <= 3 || sanity_arr_2[3] > 0) && (XYZE_N <= 4 || sanity_arr_2[4] > 0)
-  && (XYZE_N <= 5 || sanity_arr_2[5] > 0) && (XYZE_N <= 6 || sanity_arr_2[6] > 0)
-  && (XYZE_N <= 7 || sanity_arr_2[7] > 0) && (XYZE_N <= 8 || sanity_arr_2[8] > 0),
+  && (NUM_AXIS_N <= 3 || sanity_arr_2[3] > 0) && (NUM_AXIS_N <= 4 || sanity_arr_2[4] > 0)
+  && (NUM_AXIS_N <= 5 || sanity_arr_2[5] > 0) && (NUM_AXIS_N <= 6 || sanity_arr_2[6] > 0)
+  && (NUM_AXIS_N <= 7 || sanity_arr_2[7] > 0) && (NUM_AXIS_N <= 8 || sanity_arr_2[8] > 0),
   "DEFAULT_MAX_FEEDRATE values must be positive.");
 
-static_assert(COUNT(sanity_arr_3) >= XYZE, "DEFAULT_MAX_ACCELERATION requires 4 (or more) elements.");
-static_assert(COUNT(sanity_arr_3) <= XYZE_N, "DEFAULT_MAX_ACCELERATION has too many elements. (Did you forget to enable DISTINCT_E_FACTORS?)");
+static_assert(COUNT(sanity_arr_3) >= NUM_AXIS, "DEFAULT_MAX_ACCELERATION requires 4 (or more) elements.");
+static_assert(COUNT(sanity_arr_3) <= NUM_AXIS_N, "DEFAULT_MAX_ACCELERATION has too many elements. (Did you forget to enable DISTINCT_E_FACTORS?)");
 static_assert(sanity_arr_3[0] > 0 && sanity_arr_3[1] > 0 && sanity_arr_3[2] > 0
-  && (XYZE_N <= 3 || sanity_arr_3[3] > 0) && (XYZE_N <= 4 || sanity_arr_3[4] > 0)
-  && (XYZE_N <= 5 || sanity_arr_3[5] > 0) && (XYZE_N <= 6 || sanity_arr_3[6] > 0)
-  && (XYZE_N <= 7 || sanity_arr_3[7] > 0) && (XYZE_N <= 8 || sanity_arr_3[8] > 0),
+  && (NUM_AXIS_N <= 3 || sanity_arr_3[3] > 0) && (NUM_AXIS_N <= 4 || sanity_arr_3[4] > 0)
+  && (NUM_AXIS_N <= 5 || sanity_arr_3[5] > 0) && (NUM_AXIS_N <= 6 || sanity_arr_3[6] > 0)
+  && (NUM_AXIS_N <= 7 || sanity_arr_3[7] > 0) && (NUM_AXIS_N <= 8 || sanity_arr_3[8] > 0),
   "DEFAULT_MAX_ACCELERATION values must be positive.");
 
 #if ENABLED(CNC_COORDINATE_SYSTEMS) && ENABLED(NO_WORKSPACE_OFFSETS)

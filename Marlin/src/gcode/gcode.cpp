@@ -86,7 +86,7 @@ int8_t GcodeSuite::get_target_extruder_from_command() {
  *  - Set the feedrate, if included
  */
 void GcodeSuite::get_destination_from_command() {
-  LOOP_XYZE(i) {
+  LOOP_NUM_AXIS(i) {
     if (parser.seen(axis_codes[i])) {
       const float v = parser.value_axis_units((AxisEnum)i);
       destination[i] = (axis_relative_modes[i] || relative_mode)

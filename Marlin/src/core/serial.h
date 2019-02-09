@@ -208,7 +208,17 @@ void serialprint_onoff(const bool onoff);
 void serialprintln_onoff(const bool onoff);
 
 #if ENABLED(DEBUG_LEVELING_FEATURE)
-  void print_xyz(PGM_P const prefix, PGM_P const suffix, const float x, const float y, const float z);
+  void print_xyz(PGM_P const prefix, PGM_P const suffix, const float x, const float y, const float z
+    #if NON_E_AXES > 3 
+      , const float i
+      #if NON_E_AXES > 4 
+        , const float j
+        #if NON_E_AXES > 5 
+          , const float k
+        #endif
+      #endif
+    #endif
+  );
   void print_xyz(PGM_P const prefix, PGM_P const suffix, const float xyz[]);
   #define DEBUG_POS(SUFFIX,VAR) do { print_xyz(PSTR("  " STRINGIFY(VAR) "="), PSTR(" : " SUFFIX "\n"), VAR); } while(0)
 #endif

@@ -78,7 +78,7 @@ void GcodeSuite::M92() {
     true, target_extruder
   );
 
-  LOOP_XYZE(i) {
+  LOOP_NUM_AXIS(i) {
     if (parser.seenval(axis_codes[i])) {
       if (i == E_AXIS) {
         const float value = parser.value_per_axis_units((AxisEnum)(E_AXIS_N(target_extruder)));

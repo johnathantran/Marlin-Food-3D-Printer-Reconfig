@@ -435,13 +435,14 @@
  * DISTINCT_E_FACTORS affects how some E factors are accessed
  */
 #if ENABLED(DISTINCT_E_FACTORS) && E_STEPPERS > 1
-  #define XYZE_N (XYZ + E_STEPPERS)
+  #define XYZE_N (NON_E_AXES + E_STEPPERS)
   #define E_AXIS_N(E) (E_AXIS + E)
 #else
   #undef DISTINCT_E_FACTORS
   #define XYZE_N XYZE
   #define E_AXIS_N(E) E_AXIS
 #endif
+#define NUM_AXIS_N NON_E_AXES + E_STEPPERS
 
 /**
  * The BLTouch Probe emulates a servo probe
